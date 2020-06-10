@@ -1,7 +1,7 @@
-//-----------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------
 // <copyright file="CloudAnchorsNetworkManager.cs" company="Google">
 //
-// Copyright 2019 Google LLC. All Rights Reserved.
+// Copyright 2019 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,15 +50,7 @@ namespace GoogleARCore.Examples.CloudAnchors
 #pragma warning restore 618
         {
             base.OnClientConnect(conn);
-            if (conn.lastError == NetworkError.Ok)
-            {
-                Debug.Log("Successfully connected to server.");
-            }
-            else
-            {
-                Debug.LogError("Connected to server with error: " + conn.lastError);
-            }
-
+            Debug.Log("Successfully connected to server: " + conn.lastError);
             if (OnClientConnected != null)
             {
                 OnClientConnected();
@@ -74,15 +66,7 @@ namespace GoogleARCore.Examples.CloudAnchors
 #pragma warning restore 618
         {
             base.OnClientDisconnect(conn);
-            if (conn.lastError == NetworkError.Ok)
-            {
-                Debug.Log("Successfully disconnected from the server.");
-            }
-            else
-            {
-                Debug.LogError("Disconnected from the server with error: " + conn.lastError);
-            }
-
+            Debug.Log("Disconnected from the server: " + conn.lastError);
             if (OnClientDisconnected != null)
             {
                 OnClientDisconnected();

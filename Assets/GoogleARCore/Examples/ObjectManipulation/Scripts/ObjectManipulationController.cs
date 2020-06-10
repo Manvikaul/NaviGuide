@@ -1,7 +1,7 @@
-//-----------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------
 // <copyright file="ObjectManipulationController.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,16 +49,6 @@ namespace GoogleARCore.Examples.ObjectManipulation
         }
 
         /// <summary>
-        /// The Unity Awake() method.
-        /// </summary>
-        public void Awake()
-        {
-            // Enable ARCore to target 60fps camera capture frame rate on supported devices.
-            // Note, Application.targetFrameRate is ignored when QualitySettings.vSyncCount != 0.
-            Application.targetFrameRate = 60;
-        }
-
-        /// <summary>
         /// Check and update the application lifecycle.
         /// </summary>
         private void _UpdateApplicationLifecycle()
@@ -72,7 +62,8 @@ namespace GoogleARCore.Examples.ObjectManipulation
             // Only allow the screen to sleep when not tracking.
             if (Session.Status != SessionStatus.Tracking)
             {
-                Screen.sleepTimeout = SleepTimeout.SystemSetting;
+                const int lostTrackingSleepTimeout = 15;
+                Screen.sleepTimeout = lostTrackingSleepTimeout;
             }
             else
             {

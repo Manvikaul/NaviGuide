@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="CameraFocusMode.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,18 +21,18 @@
 namespace GoogleARCore
 {
     /// <summary>
-    /// Selects the desired focus mode of the camera.
+    /// Selects the auto focus behavior of the camera.
     /// </summary>
     public enum CameraFocusMode
     {
         /// <summary>
-        /// Fixed focus camera focus mode.
+        /// Fixed camera focus mode.
         /// </summary>
-        FixedFocus = 0,
+        Fixed = 0,
 
         /// <summary>
-        /// Auto focus camera focus mode.
+        /// Auto camera focus mode.
         /// </summary>
-        AutoFocus = 1,
+        Auto = 1,
     }
 }

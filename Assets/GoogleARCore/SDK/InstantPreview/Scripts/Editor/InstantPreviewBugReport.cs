@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="InstantPreviewBugReport.cs" company="Google">
 //
-// Copyright 2019 Google LLC. All Rights Reserved.
+// Copyright 2019 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -181,14 +181,10 @@ namespace GoogleARCoreInternal
             // Search through directories in PATH to find the version of adb used from PATH
             foreach (var path in pathDirs)
             {
-                // Ignore paths that contain illegal characters.
-                if (path.IndexOfAny(Path.GetInvalidPathChars()) == -1)
+                string fullAdbPath = Path.Combine(path, ShellHelper.GetAdbFileName());
+                if (File.Exists(fullAdbPath))
                 {
-                    string fullAdbPath = Path.Combine(path, ShellHelper.GetAdbFileName());
-                    if (File.Exists(fullAdbPath))
-                    {
-                        WriteCommand(fullAdbPath, "version", writer);
-                    }
+                    WriteCommand(fullAdbPath, "version", writer);
                 }
             }
         }

@@ -1,7 +1,7 @@
-//-----------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------
 // <copyright file="AugmentedImageDatabase.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ namespace GoogleARCore
     /// </summary>
     public class AugmentedImageDatabase : ScriptableObject
     {
-        private IntPtr m_ArAugmentedImageDatabase = IntPtr.Zero;
+        private IntPtr m_ArPrestoDatabase = IntPtr.Zero;
 
         [SerializeField]
         private List<AugmentedImageDatabaseEntry> m_Images =
@@ -65,7 +65,7 @@ namespace GoogleARCore
         /// </summary>
         public AugmentedImageDatabase()
         {
-            IsDirty = true;
+            m_IsDirty = true;
         }
 
         /// <summary>
@@ -86,34 +86,35 @@ namespace GoogleARCore
         /// Gets a value indicating whether the AugmentedImageDatabase is dirty and has to be reset
         /// in ArCore.
         /// </summary>
-        internal bool IsDirty { get; private set; }
+        internal bool m_IsDirty { get; private set; }
 
         /// <summary>
-        /// Gets the native handle for an associated ArAugmentedImageDatabase.
-        /// </summary>
-        internal IntPtr NativeHandle
+        /// Gets or sets the native handle for an associated ArPrestoAugmentedImageDatabase.
+        /// <summary>
+        internal IntPtr m_ArPrestoDatabaseHandle
         {
             get
             {
-                if (m_ArAugmentedImageDatabase == IntPtr.Zero)
+                if (m_ArPrestoDatabase == IntPtr.Zero)
                 {
                     var nativeSession = LifecycleManager.Instance.NativeSession;
-                    if (nativeSession == null || InstantPreviewManager.IsProvidingPlatform)
+                    if (nativeSession == null)
                     {
                         return IntPtr.Zero;
                     }
 
-                    m_ArAugmentedImageDatabase =
-                        nativeSession.AugmentedImageDatabaseApi.Create(m_RawData);
+                    m_ArPrestoDatabase =
+                        nativeSession.AugmentedImageDatabaseApi
+                            .CreateArPrestoAugmentedImageDatabase(m_RawData);
                 }
 
-                IsDirty = false;
-                return m_ArAugmentedImageDatabase;
+                m_IsDirty = false;
+                return m_ArPrestoDatabase;
             }
 
             private set
             {
-                m_ArAugmentedImageDatabase = value;
+                m_ArPrestoDatabase = value;
             }
         }
 
@@ -161,30 +162,11 @@ namespace GoogleARCore
         /// <param name="name">The name of the image.</param>
         /// <param name="image">The image to be added.</param>
         /// <param name="width">The physical width of the image in meters, or 0 if the width is
-        /// unknown.</param>
-        /// <returns>The index of the added image in this database or -1 if there was an
-        /// error.</returns>
-        /// @deprecated Please use another 'AddImage' instead.
-        [SuppressMemoryAllocationError(Reason = "Allocates memory for the image.")]
-        public int AddImage(string name, Texture2D image, float width = 0)
-        {
-            return AddImage(name, new AugmentedImageSrc(image), width);
-        }
-
-        /// <summary>
-        /// Adds an image to this database.
-        ///
-        /// This function takes time to perform non-trivial image processing (20ms -
-        /// 30ms), and should be run on a background thread.
-        /// </summary>
-        /// <param name="name">The name of the image.</param>
-        /// <param name="imageSrc">Source image to be added.</param>
-        /// <param name="width">The physical width of the image in meters, or 0 if the width is
-        /// unknown.</param>
+        /// unkwown.</param>
         /// <returns>The index of the added image in this database or -1 if there was an
         /// error.</returns>
         [SuppressMemoryAllocationError(Reason = "Allocates memory for the image.")]
-        public int AddImage(string name, AugmentedImageSrc imageSrc, float width = 0)
+        public Int32 AddImage(string name, Texture2D image, float width = 0)
         {
             var nativeSession = LifecycleManager.Instance.NativeSession;
             if (nativeSession == null)
@@ -192,15 +174,15 @@ namespace GoogleARCore
                 return -1;
             }
 
-            int imageIndex = nativeSession.AugmentedImageDatabaseApi.AddAugmentedImageAtRuntime(
-                NativeHandle, name, imageSrc, width);
+            Int32 imageIndex = nativeSession.AugmentedImageDatabaseApi.AddImageAtRuntime(
+                m_ArPrestoDatabaseHandle, name, image, width);
 
             if (imageIndex != -1)
             {
                 lock (m_Images)
                 {
                     m_Images.Add(new AugmentedImageDatabaseEntry(name, width));
-                    IsDirty = true;
+                    m_IsDirty = true;
                 }
             }
 
@@ -408,17 +390,6 @@ namespace GoogleARCore
             return !string.IsNullOrEmpty(path);
         }
         /// @endcond
-
-        /// <summary>
-        /// Unity OnDestroy.
-        /// </summary>
-        private void OnDestroy()
-        {
-            if (m_ArAugmentedImageDatabase != IntPtr.Zero)
-            {
-                AugmentedImageDatabaseApi.Release(m_ArAugmentedImageDatabase);
-            }
-        }
 #endif
     }
 }

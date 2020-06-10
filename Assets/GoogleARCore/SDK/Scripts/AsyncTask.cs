@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="AsyncTask.cs" company="Google">
 //
-// Copyright 2017 Google LLC. All Rights Reserved.
+// Copyright 2017 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ namespace GoogleARCore
     /// <typeparam name="T">The resultant type of the task.</typeparam>
     public class AsyncTask<T>
     {
+        private static bool s_IsInitialized = false;
+
         /// <summary>
         /// A collection of actons to perform on the main Unity thread after the task is complete.
         /// </summary>
@@ -45,9 +47,10 @@ namespace GoogleARCore
         internal AsyncTask(out Action<T> asyncOperationComplete)
         {
             // Register for early update event.
-            if (!AsyncTask.IsInitialized)
+            if (!s_IsInitialized)
             {
-                AsyncTask.InitAsyncTask();
+                LifecycleManager.Instance.EarlyUpdate += AsyncTask.OnUpdate;
+                s_IsInitialized = true;
             }
 
             IsComplete = false;
@@ -135,8 +138,6 @@ namespace GoogleARCore
         private static Queue<Action> s_UpdateActionQueue = new Queue<Action>();
         private static object s_LockObject = new object();
 
-        public static bool IsInitialized { get; private set; }
-
         /// <summary>
         /// Queues an action to be performed on Unity thread in Update().  This method can be called by any thread.
         /// </summary>
@@ -162,29 +163,6 @@ namespace GoogleARCore
                     action();
                 }
             }
-        }
-
-        public static void InitAsyncTask()
-        {
-            if (IsInitialized)
-            {
-                return;
-            }
-
-            LifecycleManager.Instance.EarlyUpdate += OnUpdate;
-            LifecycleManager.Instance.OnResetInstance += ResetAsyncTask;
-            IsInitialized = true;
-        }
-
-        public static void ResetAsyncTask()
-        {
-            if (!IsInitialized)
-            {
-                return;
-            }
-
-            LifecycleManager.Instance.EarlyUpdate -= OnUpdate;
-            IsInitialized = false;
         }
     }
 }

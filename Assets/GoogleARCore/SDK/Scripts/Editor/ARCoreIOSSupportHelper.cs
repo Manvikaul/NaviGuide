@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="ARCoreIOSSupportHelper.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,13 +36,12 @@ namespace GoogleARCoreInternal
             if (arcoreIOSEnabled)
             {
                 Debug.Log(
-                    "Enabling Google ARCore SDK for Unity iOS Support. " +
-                    "Note that you will need to add ARKit Unity SDK " +
+                    "Enabling ARCore iOS Support. Note that you will need to add ARKit Unity SDK " +
                     "to your project to make ARCore work on iOS.");
             }
             else
             {
-                Debug.Log("Disabling ARCore iOS support.");
+                Debug.Log("Disabling ARCore iOS Support.");
             }
 
             _UpdateIOSScriptingDefineSymbols(arcoreIOSEnabled);
@@ -58,14 +57,14 @@ namespace GoogleARCoreInternal
 
             if (arcoreIOSEnabled && !iOSSupportDefined)
             {
-                Debug.Log("Adding ARCORE_IOS_SUPPORT define symbol.");
+                Debug.Log("Adding ARCORE_IOS_SUPPORT Define Symbol.");
                 iOSScriptingDefineSymbols += ";ARCORE_IOS_SUPPORT";
                 PlayerSettings.SetScriptingDefineSymbolsForGroup(
                     BuildTargetGroup.iOS, iOSScriptingDefineSymbols);
             }
             else if (!arcoreIOSEnabled && iOSSupportDefined)
             {
-                Debug.Log("Removing ARCORE_IOS_SUPPORT define symbol.");
+                Debug.Log("Removing ARCORE_IOS_SUPPORT Define Symbol.");
                 iOSScriptingDefineSymbols =
                     iOSScriptingDefineSymbols.Replace("ARCORE_IOS_SUPPORT", string.Empty);
                 PlayerSettings.SetScriptingDefineSymbolsForGroup(

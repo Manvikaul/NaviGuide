@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="XPAnchor.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,14 +60,14 @@ namespace GoogleARCore.CrossPlatform
                     return XPTrackingState.Stopped;
                 }
 
-                return NativeSession.AnchorApi.GetTrackingState(NativeHandle)
+                return m_NativeSession.AnchorApi.GetTrackingState(m_NativeHandle)
                     .ToXPTrackingState();
             }
         }
 
-        internal NativeSession NativeSession { get; private set; }
+        internal NativeSession m_NativeSession { get; private set; }
 
-        internal IntPtr NativeHandle { get; private set; }
+        internal IntPtr m_NativeHandle { get; private set; }
 
         internal static XPAnchor Factory(NativeSession nativeSession, IntPtr anchorHandle,
             bool isCreate = true)
@@ -81,7 +81,7 @@ namespace GoogleARCore.CrossPlatform
             if (s_AnchorDict.TryGetValue(anchorHandle, out result))
             {
                 // Release acquired handle and return cached result
-                AnchorApi.Release(anchorHandle);
+                result.m_NativeSession.AnchorApi.Release(anchorHandle);
                 return result;
             }
 
@@ -90,8 +90,8 @@ namespace GoogleARCore.CrossPlatform
                XPAnchor anchor = (new GameObject()).AddComponent<XPAnchor>();
                anchor.gameObject.name = "XPAnchor";
                anchor.CloudId = nativeSession.AnchorApi.GetCloudAnchorId(anchorHandle);
-               anchor.NativeHandle = anchorHandle;
-               anchor.NativeSession = nativeSession;
+               anchor.m_NativeHandle = anchorHandle;
+               anchor.m_NativeSession = nativeSession;
                anchor.Update();
 
                s_AnchorDict.Add(anchorHandle, anchor);
@@ -102,11 +102,11 @@ namespace GoogleARCore.CrossPlatform
         }
 
         /// <summary>
-        /// Unity Update.
+        /// The Unity Update method.
         /// </summary>
         private void Update()
         {
-            if (NativeHandle == IntPtr.Zero)
+            if (m_NativeHandle == IntPtr.Zero)
             {
                 Debug.LogError(
                     "Anchor components instantiated outside of ARCore are not supported. " +
@@ -119,7 +119,7 @@ namespace GoogleARCore.CrossPlatform
                 return;
             }
 
-            var pose = NativeSession.AnchorApi.GetPose(NativeHandle);
+            var pose = m_NativeSession.AnchorApi.GetPose(m_NativeHandle);
             transform.position = pose.position;
             transform.rotation = pose.rotation;
 
@@ -138,18 +138,14 @@ namespace GoogleARCore.CrossPlatform
 
         private void OnDestroy()
         {
-            if (NativeHandle == IntPtr.Zero)
+            if (m_NativeHandle == IntPtr.Zero)
             {
                 return;
             }
 
-            if (NativeSession != null && !NativeSession.IsDestroyed)
-            {
-                NativeSession.AnchorApi.Detach(NativeHandle);
-            }
-
-            s_AnchorDict.Remove(NativeHandle);
-            AnchorApi.Release(NativeHandle);
+            s_AnchorDict.Remove(m_NativeHandle);
+            m_NativeSession.AnchorApi.Detach(m_NativeHandle);
+            m_NativeSession.AnchorApi.Release(m_NativeHandle);
         }
 
         private bool _IsSessionDestroyed()
@@ -157,7 +153,7 @@ namespace GoogleARCore.CrossPlatform
             if (!m_IsSessionDestroyed)
             {
                 var nativeSession = LifecycleManager.Instance.NativeSession;
-                if (nativeSession != NativeSession)
+                if (nativeSession != m_NativeSession)
                 {
                     Debug.LogErrorFormat(
                         "The session which created this anchor has been destroyed. " +

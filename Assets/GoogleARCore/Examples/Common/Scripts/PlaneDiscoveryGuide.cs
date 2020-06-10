@@ -1,7 +1,7 @@
-//-----------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------
 // <copyright file="PlaneDiscoveryGuide.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -229,10 +229,6 @@ namespace GoogleARCore.Examples.Common
                         break;
                     case LostTrackingReason.ExcessiveMotion:
                         m_SnackBarText.text = "Moving too fast. Slow down.";
-                        break;
-                    case LostTrackingReason.CameraUnavailable:
-                        m_SnackBarText.text = "Another app is using the camera. Tap on this app " +
-                            "or try closing the other one.";
                         break;
                     default:
                         m_SnackBarText.text = "Motion tracking is lost.";

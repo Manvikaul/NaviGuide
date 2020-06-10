@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------
 // <copyright file="ARCoreAndroidLifecycleManager.cs" company="Google">
 //
-// Copyright 2018 Google LLC. All Rights Reserved.
+// Copyright 2018 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,10 +34,8 @@ namespace GoogleARCoreInternal
     using IOSImport = GoogleARCoreInternal.DllImportNoop;
 #endif
 
-
     internal class ARCoreAndroidLifecycleManager : ILifecycleManager
     {
-
         private static ARCoreAndroidLifecycleManager s_Instance = null;
 
         private IntPtr m_CachedSessionHandle = IntPtr.Zero;
@@ -55,8 +53,6 @@ namespace GoogleARCoreInternal
 
         private bool? m_DesiredSessionState = null;
 
-        private bool m_DisabledSessionOnErrorState = false;
-
         // Only care about disable to enable transition here (ignore enable to disable transition)
         // because it will triggier _OnBeforeResumeSession which links to a public API
         // RegisterChooseCameraConfigurationCallback.
@@ -69,18 +65,11 @@ namespace GoogleARCoreInternal
 
         private List<CameraConfig> m_TempCameraConfigs = new List<CameraConfig>();
 
-        private int m_CameraTextureId = -1;
-        private Texture2D m_CameraTexture2D = null;
-
         public event Action UpdateSessionFeatures;
 
         public event Action EarlyUpdate;
 
         public event Action<bool> OnSessionSetEnabled;
-
-        public event Action<IntPtr, IntPtr> OnSetConfiguration;
-
-        public event Action OnResetInstance;
 
         public static ARCoreAndroidLifecycleManager Instance
         {
@@ -93,8 +82,6 @@ namespace GoogleARCoreInternal
                     ARPrestoCallbackManager.Instance.EarlyUpdate += s_Instance._OnEarlyUpdate;
                     ARPrestoCallbackManager.Instance.BeforeResumeSession +=
                         s_Instance._OnBeforeResumeSession;
-                    ARPrestoCallbackManager.Instance.OnSetConfiguration +=
-                        s_Instance._SetSessionConfiguration;
 
                     ExperimentManager.Instance.Initialize();
                 }
@@ -173,22 +160,10 @@ namespace GoogleARCoreInternal
             ExternApi.ArPresto_reset();
         }
 
-        /// <summary>
-        /// Force reset the singleton instance to null. Should only be used in Unit Test.
-        /// </summary>
-        internal static void ResetInstance()
-        {
-            if (s_Instance != null && s_Instance.OnResetInstance != null)
-            {
-                s_Instance.OnResetInstance();
-            }
-
-            s_Instance = null;
-        }
-
         private void _OnBeforeResumeSession(IntPtr sessionHandle)
         {
-            if (SessionComponent == null || sessionHandle == IntPtr.Zero)
+            if (SessionComponent == null || sessionHandle == IntPtr.Zero ||
+                SessionComponent.GetChooseCameraConfigurationCallback() == null)
             {
                 return;
             }
@@ -196,8 +171,7 @@ namespace GoogleARCoreInternal
             NativeSession tempNativeSession = _GetNativeSession(sessionHandle);
 
             var listHandle = tempNativeSession.CameraConfigListApi.Create();
-            tempNativeSession.SessionApi.GetSupportedCameraConfigurationsWithFilter(
-                SessionComponent.CameraConfigFilter,
+            tempNativeSession.SessionApi.GetSupportedCameraConfigurations(
                 listHandle, m_TempCameraConfigHandles, m_TempCameraConfigs,
                 SessionComponent.DeviceCameraDirection);
 
@@ -208,13 +182,8 @@ namespace GoogleARCoreInternal
             }
             else
             {
-                var configIndex = 0;
-                if (SessionComponent.GetChooseCameraConfigurationCallback() != null)
-                {
-                    configIndex = SessionComponent.GetChooseCameraConfigurationCallback()(
-                        m_TempCameraConfigs);
-                }
-
+                var configIndex =
+                    SessionComponent.GetChooseCameraConfigurationCallback()(m_TempCameraConfigs);
                 if (configIndex >= 0 && configIndex < m_TempCameraConfigHandles.Count)
                 {
                     var status = tempNativeSession.SessionApi.SetCameraConfig(
@@ -241,12 +210,20 @@ namespace GoogleARCoreInternal
 
         private void _OnEarlyUpdate()
         {
-            _SetCameraTextureName();
-
             // Update session activity before EarlyUpdate.
             if (m_HaveDisableToEnableTransition)
             {
                 _SetSessionEnabled(false);
+
+                // Refresh SessionStatus after first _SetSessionEnabled() to catch any changes to
+                // the SessionStatus that may affect the subsequent _SetSessionEnabled().
+                // This fixes an issue where the session does not get re-enabled properly when an
+                // unsupported configuration is fixed, and the ARCoreSession component's enabled
+                // state is toggled in the same frame;
+                ApiPrestoStatus refreshPrestoStatus = ApiPrestoStatus.Uninitialized;
+                ExternApi.ArPresto_getStatus(ref refreshPrestoStatus);
+                SessionStatus = refreshPrestoStatus.ToSessionStatus();
+
                 _SetSessionEnabled(true);
                 m_HaveDisableToEnableTransition = false;
 
@@ -287,20 +264,7 @@ namespace GoogleARCoreInternal
                     _FireOnSessionSetEnabled(true);
                 }
 
-                // Validate and convert the SessionConfig to a Instant Preview supported config by
-                // logging and disabling limited supported features.
-                if (InstantPreviewManager.IsProvidingPlatform &&
-                    SessionComponent.SessionConfig != null &&
-                    !InstantPreviewManager.ValidateSessionConfig(SessionComponent.SessionConfig))
-                {
-                    // A new SessionConfig object will be created based on the original
-                    // SessionConfig with all limited support features disabled.
-                    SessionComponent.SessionConfig =
-                        InstantPreviewManager.GenerateInstantPreviewSupportedConfig(
-                            SessionComponent.SessionConfig);
-                }
-
-                _UpdateConfiguration(SessionComponent.SessionConfig);
+                _SetConfiguration(SessionComponent.SessionConfig);
             }
 
             _UpdateDisplayGeometry();
@@ -329,16 +293,6 @@ namespace GoogleARCoreInternal
             {
                 // Disable internal session bits so we properly pause the session due to error.
                 _FireOnSessionSetEnabled(false);
-                m_DisabledSessionOnErrorState = true;
-            }
-            else if (SessionStatus.IsValid() && m_DisabledSessionOnErrorState)
-            {
-                if (SessionComponent.enabled)
-                {
-                    _FireOnSessionSetEnabled(true);
-                }
-
-                m_DisabledSessionOnErrorState = false;
             }
 
             // Get the current session from presto and note if it has changed.
@@ -360,32 +314,6 @@ namespace GoogleARCoreInternal
             if (EarlyUpdate != null)
             {
                 EarlyUpdate();
-            }
-        }
-
-        private void _SetCameraTextureName()
-        {
-            if (InstantPreviewManager.IsProvidingPlatform)
-            {
-                return;
-            }
-
-            if (m_CameraTextureId == -1)
-            {
-                int[] textureIds = new int[1];
-                OpenGL.glGenTextures(1, textureIds);
-                m_CameraTextureId = textureIds[0];
-                int error = OpenGL.glGetError();
-                if (error != 0)
-                {
-                    Debug.LogErrorFormat("OpenGL glGenTextures error: {0}", error);
-                }
-
-                OpenGL.glBindTexture(OpenGL.Target.GL_TEXTURE_EXTERNAL_OES,
-                                   m_CameraTextureId);
-                m_CameraTexture2D = Texture2D.CreateExternalTexture(
-                    0, 0, TextureFormat.ARGB32, false, false, new IntPtr(m_CameraTextureId));
-                ExternApi.ArPresto_setCameraTextureName(m_CameraTextureId);
             }
         }
 
@@ -424,18 +352,34 @@ namespace GoogleARCoreInternal
 
             IntPtr frameHandle = IntPtr.Zero;
             ExternApi.ArPresto_getFrame(ref frameHandle);
+
+            int backgroundTextureId = ExternApi.ArCoreUnity_getBackgroundTextureId();
+
             if (frameHandle == IntPtr.Zero)
             {
                 // This prevents using a texture that has not been filled out by ARCore.
                 return;
             }
-
-            if (m_CameraTextureId == -1)
+            else if (backgroundTextureId == -1)
             {
                 return;
             }
+            else if (BackgroundTexture != null &&
+                BackgroundTexture.GetNativeTexturePtr().ToInt32() == backgroundTextureId)
+            {
+                return;
+            }
+            else if (BackgroundTexture == null)
+            {
+                // The Unity-cached size and format of the texture (0x0, ARGB) is not the
+                // actual format of the texture. This is okay because the texture is not
+                // accessed by pixels, it is accessed with UV coordinates.
+                BackgroundTexture = Texture2D.CreateExternalTexture(
+                    0, 0, TextureFormat.ARGB32, false, false, new IntPtr(backgroundTextureId));
+                return;
+            }
 
-            BackgroundTexture = m_CameraTexture2D;
+            BackgroundTexture.UpdateExternalTexture(new IntPtr(backgroundTextureId));
         }
 
         private void _SetSessionEnabled(bool sessionEnabled)
@@ -494,30 +438,7 @@ namespace GoogleARCoreInternal
             return true;
         }
 
-        private void _SetSessionConfiguration(IntPtr sessionHandle, IntPtr configHandle)
-        {
-            if (configHandle == IntPtr.Zero)
-            {
-                Debug.LogWarning("Cannot set configuration for invalid configHanlde.");
-                return;
-            }
-
-            if (sessionHandle == IntPtr.Zero && !InstantPreviewManager.IsProvidingPlatform)
-            {
-                Debug.LogWarning("Cannot set configuration for invalid sessionHandle.");
-                return;
-            }
-
-            SessionConfigApi.UpdateApiConfigWithARCoreSessionConfig(
-                sessionHandle, configHandle, m_CachedConfig);
-
-            if (OnSetConfiguration != null)
-            {
-                OnSetConfiguration(sessionHandle, configHandle);
-            }
-        }
-
-        private void _UpdateConfiguration(ARCoreSessionConfig config)
+        private void _SetConfiguration(ARCoreSessionConfig config)
         {
             // There is no configuration to set.
             if (config == null)
@@ -528,19 +449,49 @@ namespace GoogleARCoreInternal
             // The configuration has not been updated.
             if (m_CachedConfig != null && config.Equals(m_CachedConfig) &&
                 (config.AugmentedImageDatabase == null ||
-                    !config.AugmentedImageDatabase.IsDirty) &&
+                 !config.AugmentedImageDatabase.m_IsDirty) &&
                 !ExperimentManager.Instance.IsConfigurationDirty)
             {
                 return;
             }
 
+            if (InstantPreviewManager.IsProvidingPlatform)
+            {
+                if (config.LightEstimationMode != LightEstimationMode.Disabled)
+                {
+                    InstantPreviewManager.LogLimitedSupportMessage("enable 'Light Estimation'");
+                    config.LightEstimationMode = LightEstimationMode.Disabled;
+                }
+
+                if (config.AugmentedImageDatabase != null)
+                {
+                    InstantPreviewManager.LogLimitedSupportMessage("enable 'Augmented Images'");
+                    config.AugmentedImageDatabase = null;
+                }
+
+                if (config.AugmentedFaceMode == AugmentedFaceMode.Mesh)
+                {
+                    InstantPreviewManager.LogLimitedSupportMessage("enable 'Augmented Faces'");
+                    config.AugmentedFaceMode = AugmentedFaceMode.Disabled;
+                }
+            }
+
+            var prestoConfig = new ApiPrestoConfig(config);
+            ExternApi.ArPresto_setConfiguration(ref prestoConfig);
             m_CachedConfig = ScriptableObject.CreateInstance<ARCoreSessionConfig>();
             m_CachedConfig.CopyFrom(config);
-            ExternApi.ArPresto_setConfigurationDirty();
         }
 
         private void _UpdateDisplayGeometry()
         {
+            IntPtr sessionHandle = IntPtr.Zero;
+            ExternApi.ArPresto_getSession(ref sessionHandle);
+
+            if (sessionHandle == IntPtr.Zero)
+            {
+                return;
+            }
+
             if (!m_CachedScreenOrientation.HasValue ||
                 Screen.orientation != m_CachedScreenOrientation)
             {
@@ -548,8 +499,8 @@ namespace GoogleARCoreInternal
                 m_CachedDisplayRotation = AndroidNativeHelper.GetDisplayRotation();
             }
 
-            ExternApi.ArPresto_setDisplayGeometry(
-                m_CachedDisplayRotation, Screen.width, Screen.height);
+            ExternApi.ArSession_setDisplayGeometry(
+                sessionHandle, (int)m_CachedDisplayRotation, Screen.width, Screen.height);
         }
 
         private NativeSession _GetNativeSession(IntPtr sessionHandle)
@@ -575,12 +526,12 @@ namespace GoogleARCoreInternal
         private struct ExternApi
         {
 #pragma warning disable 626
+            [AndroidImport(ApiConstants.ARCoreNativeApi)]
+            public static extern void ArSession_setDisplayGeometry(
+                IntPtr sessionHandle, int rotation, int width, int height);
+
             [AndroidImport(ApiConstants.ARCoreShimApi)]
             public static extern int ArCoreUnity_getBackgroundTextureId();
-
-            [AndroidImport(ApiConstants.ARPrestoApi)]
-            public static extern void ArPresto_setDisplayGeometry(
-                AndroidNativeHelper.AndroidSurfaceRotation rotation, int width, int height);
 
             [AndroidImport(ApiConstants.ARPrestoApi)]
             public static extern void ArPresto_getSession(ref IntPtr sessionHandle);
@@ -589,10 +540,8 @@ namespace GoogleARCoreInternal
             public static extern void ArPresto_setDeviceCameraDirection(
                 ApiPrestoDeviceCameraDirection cameraDirection);
 
-
             [AndroidImport(ApiConstants.ARPrestoApi)]
-            public static extern void ArPresto_setCameraTextureName(
-                int textureId);
+            public static extern void ArPresto_setConfiguration(ref ApiPrestoConfig config);
 
             [AndroidImport(ApiConstants.ARPrestoApi)]
             public static extern void ArPresto_setEnabled(bool isEnabled);
@@ -605,9 +554,6 @@ namespace GoogleARCoreInternal
 
             [AndroidImport(ApiConstants.ARPrestoApi)]
             public static extern void ArPresto_update();
-
-            [AndroidImport(ApiConstants.ARPrestoApi)]
-            public static extern void ArPresto_setConfigurationDirty();
 
             [AndroidImport(ApiConstants.ARPrestoApi)]
             public static extern void ArPresto_reset();

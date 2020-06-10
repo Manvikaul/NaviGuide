@@ -1,4 +1,4 @@
-Shader "ARCore/PlaneGrid"
+﻿Shader "ARCore/PlaneGrid"
 {
     Properties
     {

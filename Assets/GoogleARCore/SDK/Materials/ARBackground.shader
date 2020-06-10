@@ -1,4 +1,4 @@
-Shader "ARCore/ARBackground"
+﻿Shader "ARCore/ARBackground"
 {
     Properties {
         _MainTex ("Main Texture", 2D) = "white" {}
@@ -18,13 +18,11 @@ Shader "ARCore/ARBackground"
 
             #pragma only_renderers gles3 gles
 
-            // #ifdef SHADER_API_GLES3 cannot take effect because
-            // #extension is processed before any Unity defined symbols.
-            // Use "enable" instead of "require" here, so it only gives a
-            // warning but not compile error when the implementation does not
-            // support the extension.
-            #extension GL_OES_EGL_image_external_essl3 : enable
-            #extension GL_OES_EGL_image_external : enable
+            #ifdef SHADER_API_GLES3
+            #extension GL_OES_EGL_image_external_essl3 : require
+            #else
+            #extension GL_OES_EGL_image_external : require
+            #endif
 
             uniform vec4 _UvTopLeftRight;
             uniform vec4 _UvBottomLeftRight;
